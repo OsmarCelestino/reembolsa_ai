@@ -2,6 +2,11 @@
 
 namespace App\Enums;
 
+/**
+ * Ciclo de vida do pedido:
+ * submitted → processing → auto_approved | pending_review | rejected;
+ * pending_review → approved | rejected (analista); failed se a fila esgotar as tentativas.
+ */
 enum ReimbursementStatus: string
 {
     case Submitted = 'submitted';
@@ -11,9 +16,4 @@ enum ReimbursementStatus: string
     case Approved = 'approved';
     case Rejected = 'rejected';
     case Failed = 'failed';
-
-    public function isFinal(): bool
-    {
-        return in_array($this, [self::AutoApproved, self::Approved, self::Rejected], true);
-    }
 }

@@ -5,11 +5,13 @@ namespace App\Domain\Reimbursement;
 use App\Enums\ReimbursementStatus;
 use App\Enums\Severity;
 
+/** Resultado de ReimbursementRules::evaluate(): a lista de violações e o status que ela implica. */
 final readonly class Decision
 {
     /** @param list<Violation> $violations */
     public function __construct(public array $violations) {}
 
+    /** Qualquer hard → rejected; senão qualquer soft → pending_review; sem violações → auto_approved. */
     public function status(): ReimbursementStatus
     {
         if ($this->has(Severity::Hard)) {

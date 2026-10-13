@@ -4,6 +4,10 @@ namespace App\Domain\Reimbursement;
 
 use App\Enums\Severity;
 
+/**
+ * Uma regra que o pedido violou. Hard recusa, soft manda para analista.
+ * O `code` é estável (testes e clientes da API dependem dele); a `message` é para pessoas.
+ */
 final readonly class Violation
 {
     public function __construct(

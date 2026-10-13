@@ -110,7 +110,6 @@ final class AnthropicReceiptExtractor implements ReceiptExtractor
         return [
             'model' => $this->model,
             'max_tokens' => $this->maxTokens,
-            'temperature' => 0,
             'system' => self::SYSTEM_PROMPT,
             'tools' => [$this->toolDefinition()],
             'tool_choice' => ['type' => 'tool', 'name' => self::TOOL_NAME],
@@ -159,6 +158,7 @@ final class AnthropicReceiptExtractor implements ReceiptExtractor
         ];
     }
 
+    /** Decide se um erro HTTP é temporário (AiProviderUnavailable) ou definitivo (ExtractionFailed). */
     private function guardStatus(Response $response): void
     {
         if ($response->successful()) {
@@ -175,7 +175,11 @@ final class AnthropicReceiptExtractor implements ReceiptExtractor
         throw new ExtractionFailed("Anthropic recusou a requisição (HTTP {$status}).");
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Pega os argumentos da chamada register_receipt; qualquer outra resposta é ExtractionFailed.
+     *
+     * @return array<string, mixed>
+     */
     private function toolInput(Response $response): array
     {
         foreach ((array) $response->json('content', []) as $block) {
@@ -187,7 +191,12 @@ final class AnthropicReceiptExtractor implements ReceiptExtractor
         throw new ExtractionFailed('A resposta da IA não trouxe a chamada register_receipt (stop_reason: '.$response->json('stop_reason').').');
     }
 
-    /** @param array<string, mixed> $input */
+    /**
+     * Revalida tudo o que a IA devolveu (nunca confia no schema da ferramenta) e normaliza
+     * CNPJ, valor e texto. Também roda a heurística local de injeção no nome do emitente.
+     *
+     * @param  array<string, mixed>  $input
+     */
     private function toReceipt(array $input): ExtractedReceipt
     {
         $validator = Validator::make($input, [

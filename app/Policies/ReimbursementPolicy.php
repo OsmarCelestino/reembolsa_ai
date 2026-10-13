@@ -6,6 +6,7 @@ use App\Models\Reimbursement;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
 
+/** Quem vê e quem revisa um pedido. */
 class ReimbursementPolicy
 {
     public function view(User $user, Reimbursement $reimbursement): Response

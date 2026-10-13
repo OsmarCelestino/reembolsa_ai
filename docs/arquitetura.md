@@ -14,7 +14,9 @@ torna impossível testar a regra sozinha. O meio-termo:
 | Action | `app/Actions/Reimbursements` | Um caso de uso por classe (enviar, processar, revisar) |
 | Regras | `app/Domain/Reimbursement` | Regra de negócio pura, sem banco/HTTP/IA |
 | Porta de IA | `app/Ai/Contracts/ReceiptExtractor` | Interface; a implementação Anthropic fica em `app/Ai` |
-| Job | `app/Jobs` | Processamento assíncrono com retry |
+| Job | `app/Jobs` | Processamento assíncrono com retry, via RabbitMQ (testado de verdade em `tests/Feature/Queue`) |
+| Suporte | `app/Support` | Utilitários puros: `Money` (centavos), `Cnpj` (inclusive alfanumérico), `Text` (limpeza), `PromptInjectionDetector` |
+| Demo e avaliação | `app/Demo`, `app/Eval` | Comprovantes fictícios com gabarito para `reembolso:demo` e `eval:run` |
 
 Eloquent é usado direto nas Actions (sem repositórios): é o padrão do Laravel e não esconde nada.
 A única abstração "extra" é a interface da IA, porque ela é externa, cara e instável — e precisa de fake nos testes.
@@ -25,7 +27,7 @@ A única abstração "extra" é a interface da IA, porque ela é externa, cara e
 POST /api/reimbursements
   → StoreReimbursementRequest (valida)        → 422 se inválido
   → SubmitReimbursement (salva arquivo privado, status=submitted)
-  → 202 Accepted + ProcessReimbursementJob na fila
+  → 202 Accepted + ProcessReimbursementJob publicado no RabbitMQ (só após o commit)
 
 ProcessReimbursementJob
   → ProcessReimbursement
@@ -37,6 +39,10 @@ ProcessReimbursementJob
 POST /api/reimbursements/{id}/review           # analista, nunca no próprio pedido
   → ReviewReimbursement (pending_review → approved | rejected)
 ```
+
+Se a IA falhar de forma temporária (`AiProviderUnavailable`), o job volta para o RabbitMQ com espera (filas `default.delay.<ms>`)
+e tenta de novo; esgotadas as 3 tentativas, o pedido vira `failed` e o job vai para a tabela `failed_jobs`.
+Se a resposta da IA for inválida (`ExtractionFailed`), o pedido vai direto para `pending_review`.
 
 ## Segurança
 
@@ -74,6 +80,6 @@ esperado é `rejected`, independentemente do que a IA responder. Teste equivalen
 `tests/Feature/DemoScenarioTest.php`.
 
 ## Próximos passos
-- RabbitMQ como driver da fila; Camunda para o fluxo de aprovação.
+- Camunda para o fluxo de aprovação.
 - RAG com pgvector sobre a política de reembolso.
-- `php artisan eval:run` com um conjunto de comprovantes rotulados para medir acerto, custo e latência.
+- Ampliar o `eval:run` com comprovantes reais anonimizados (ver [avaliacao.md](avaliacao.md)).

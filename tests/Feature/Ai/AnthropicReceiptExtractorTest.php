@@ -61,7 +61,8 @@ it('envia o comprovante com ferramenta forçada e devolve dados tipados', functi
             && $request->hasHeader('x-api-key', 'test-key')
             && $request->hasHeader('anthropic-version', '2023-06-01')
             && $body['model'] === 'claude-haiku-5-5'
-            && $body['temperature'] === 0
+            // Os modelos 5.5 recusam `temperature` (HTTP 400).
+            && ! array_key_exists('temperature', $body)
             && $body['tool_choice'] === ['type' => 'tool', 'name' => 'register_receipt']
             && count($body['tools']) === 1
             && $body['messages'][0]['content'][0]['type'] === 'document'

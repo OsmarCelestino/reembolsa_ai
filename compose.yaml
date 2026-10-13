@@ -7,20 +7,25 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - rabbitmq
+      db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   queue:
     build: .
     container_name: reembolsa_ai_queue
-    command: php artisan queue:work --tries=3 --backoff=30
+    command: php artisan queue:work rabbitmq --tries=3 --backoff=30
     environment:
       WAIT_FOR_VENDOR: "1"
     restart: unless-stopped
     volumes:
       - .:/var/www
     depends_on:
-      - db
+      db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   db:
     image: pgvector/pgvector:pg16
@@ -39,7 +44,12 @@ services:
     container_name: reembolsa_ai_rabbitmq
     ports:
       - "5672:5672"
-      - "15672:15672"
+      - "15672:15672" # painel: http://localhost:15672 (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
 
 volumes:
   pgdata:

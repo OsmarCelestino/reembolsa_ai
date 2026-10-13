@@ -43,13 +43,11 @@ class Reimbursement extends Model
         return $this->belongsTo(User::class);
     }
 
-    /** @return BelongsTo<User, $this> */
-    public function reviewer(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'reviewer_id');
-    }
-
-    /** @param Builder<Reimbursement> $query */
+    /**
+     * Analista vê todos os pedidos; funcionário, só os seus.
+     *
+     * @param  Builder<Reimbursement>  $query
+     */
     public function scopeVisibleTo(Builder $query, User $user): void
     {
         if (! $user->isReviewer()) {

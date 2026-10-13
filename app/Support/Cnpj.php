@@ -8,6 +8,7 @@ namespace App\Support;
  */
 final class Cnpj
 {
+    /** Remove pontuação e espaços e põe em maiúsculas. Não valida. */
     public static function normalize(string $value): string
     {
         return strtoupper((string) preg_replace('/[.\-\/\s]/', '', $value));
@@ -37,13 +38,7 @@ final class Cnpj
         return substr($cnpj, 12, 2) === $first.$second;
     }
 
-    public static function format(string $value): string
-    {
-        $c = self::normalize($value);
-
-        return sprintf('%s.%s.%s/%s-%s', substr($c, 0, 2), substr($c, 2, 3), substr($c, 5, 3), substr($c, 8, 4), substr($c, 12, 2));
-    }
-
+    /** Módulo 11 com pesos 2..9; cada caractere vale ASCII − 48 (assim letras funcionam no CNPJ alfanumérico). */
     private static function checkDigit(string $digits): string
     {
         $weight = strlen($digits) - 7; // 5 para 12 posições, 6 para 13

@@ -7,11 +7,13 @@ A IA nunca decide nada. Ela só preenche um formulário; quem aprova ou recusa s
 ## Stack
 
 - PHP 8.4 / Laravel 13, Sanctum (API com token)
-- PostgreSQL + pgvector, RabbitMQ
+- PostgreSQL + pgvector
+- RabbitMQ como fila: o processamento com IA roda num worker separado, com novas tentativas e espera crescente
 - Docker Compose (app, fila, banco, RabbitMQ)
-- Pest (114 testes)
+- Pest (119 testes)
 
 Detalhes de arquitetura e segurança: [docs/arquitetura.md](docs/arquitetura.md).
+Avaliação de precisão, latência e custo da IA: [docs/avaliacao.md](docs/avaliacao.md).
 
 ## Passo a passo
 
@@ -36,10 +38,11 @@ O `--seed` cria dois usuários de desenvolvimento (senha `password`):
 ### 2. Rodar os testes
 
 ```bash
-docker compose exec app ./vendor/bin/pest
+docker compose exec app ./vendor/bin/pest                   # todos
+docker compose exec app ./vendor/bin/pest --group=rabbitmq  # só a integração com o RabbitMQ
 ```
 
-Os testes nunca chamam a API real nem gastam crédito: as respostas da IA são simuladas.
+Os testes nunca chamam a API real nem gastam crédito: as respostas da IA são simuladas. Quase todos processam a fila na hora (`sync`); os do grupo `rabbitmq` publicam e consomem no RabbitMQ de verdade, cada um numa fila descartável, e são pulados se ele não estiver no ar.
 
 ### 3. Rodar a demonstração com as 2 notas fictícias
 
@@ -81,7 +84,17 @@ Os PDFs ficam em `storage/app/private/demo/` para você abrir. Para só gerar os
 
 O mesmo cenário está coberto por teste automatizado em `tests/Feature/DemoScenarioTest.php`, com a resposta da IA simulada.
 
-### 4. Usar a API (opcional)
+### 4. Avaliar a IA (precisão, latência e custo)
+
+```bash
+docker compose exec app php artisan eval:run --runs=3
+```
+
+Processa 12 comprovantes fictícios rotulados (as 2 notas da demo e mais 10 casos: desconto, nota vencida, data futura, CNPJ inválido, categoria errada, orçamento, manipulação sutil...) e compara com o gabarito. Não grava nada no banco.
+
+Último resultado com `claude-haiku-5-5`: **36/36 decisões corretas**, 100% dos campos, 0 aprovações automáticas indevidas, p95 de 2,3 s e **US$ 0,41 por mil notas**. Método, casos, limitações e o que a avaliação encontrou estão em [docs/avaliacao.md](docs/avaliacao.md).
+
+### 5. Usar a API (opcional)
 
 No PowerShell, use `curl.exe` (o `curl` de lá é outro comando) e troque as `\` do fim das linhas por `` ` ``.
 
@@ -97,7 +110,7 @@ curl -s -X POST http://localhost:8000/api/reimbursements \
   -F category=alimentacao -F claimed_amount=45.90 -F description="Almoço" \
   -F receipt=@storage/app/private/demo/nota-1-restaurante.pdf
 
-# Acompanhar (o processamento acontece no serviço "queue")
+# Acompanhar (o worker "queue" consome o RabbitMQ; painel em http://localhost:15672, guest/guest)
 curl -s http://localhost:8000/api/reimbursements/1 \
   -H "Accept: application/json" -H "Authorization: Bearer <TOKEN>"
 ```
@@ -107,6 +120,7 @@ Como a demo já usou esses PDFs, apague os pedidos dela antes (ou rode `php arti
 | Método | Rota | Quem |
 |---|---|---|
 | POST | `/api/tokens` | Público (5 tentativas/min) |
+| DELETE | `/api/tokens/current` | Autenticado (revoga o token usado na requisição) |
 | GET | `/api/reimbursements?status=&sort=&direction=&per_page=` | Autenticado |
 | POST | `/api/reimbursements` | Autenticado (10 envios/min) |
 | GET | `/api/reimbursements/{id}` | Dono ou analista |
@@ -128,7 +142,8 @@ Os limites ficam em `config/reimbursement.php` e podem ser trocados pelo `.env`.
 
 ## Próximos passos
 
-- `php artisan eval:run` com mais comprovantes rotulados (acerto, custo e latência)
+- `eval:run` com comprovantes reais anonimizados (fotos, cupons térmicos, escaneados)
+- Suporte a `claude-sonnet-5-5` no extrator (ver [docs/avaliacao.md](docs/avaliacao.md#o-que-a-avaliação-encontrou))
 - RAG com pgvector sobre a política de reembolso
-- RabbitMQ como driver da fila e Camunda no fluxo de aprovação
+- Camunda no fluxo de aprovação
 - CI no GitHub Actions (Pest, Pint, PHPStan)

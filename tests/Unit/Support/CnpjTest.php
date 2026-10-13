@@ -15,7 +15,3 @@ it('valida CNPJ numérico e alfanumérico', function (string $cnpj, bool $valid)
     'DV com letra' => ['12ABC34501DE3A', false],
     'injeção' => ["11222333000181' OR 1=1 --", false],
 ]);
-
-it('formata o CNPJ', function () {
-    expect(Cnpj::format('12abc34501de35'))->toBe('12.ABC.345/01DE-35');
-});

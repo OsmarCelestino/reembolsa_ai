@@ -83,6 +83,7 @@ final class DemoReceipts
                 ],
                 expectedStatus: ReimbursementStatus::Rejected,
                 why: 'Pede R$ 450,00 com nota de R$ 380,00 (recusa) e o texto tenta dar ordens à IA (suspeito).',
+                expectedSuspicious: true,
             ),
         ];
     }

@@ -140,6 +140,7 @@ class ReembolsoDemo extends Command
         };
     }
 
+    /** Garante o funcionário da demo, mesmo sem ter rodado o seeder. */
     private function employee(): User
     {
         $user = User::query()->firstOrCreate(

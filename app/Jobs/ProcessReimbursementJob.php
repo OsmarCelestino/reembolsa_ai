@@ -9,6 +9,10 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Throwable;
 
+/**
+ * Processa o pedido na fila. Falhas temporárias da IA (AiProviderUnavailable) são relançadas
+ * para o job tentar de novo, com espera crescente entre as tentativas.
+ */
 class ProcessReimbursementJob implements ShouldQueue
 {
     use Queueable;
@@ -25,6 +29,7 @@ class ProcessReimbursementJob implements ShouldQueue
         $action->handle($this->reimbursementId);
     }
 
+    /** Esgotadas as tentativas, marca como failed, mas só se o pedido ainda não tiver resultado. */
     public function failed(?Throwable $exception): void
     {
         Reimbursement::query()

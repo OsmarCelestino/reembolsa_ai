@@ -9,6 +9,7 @@ enum ExpenseCategory: string
     case Hospedagem = 'hospedagem';
     case Material = 'material';
 
+    /** Limite por comprovante, em centavos (config/reimbursement.php). Acima dele vai para analista. */
     public function limitCents(): int
     {
         return (int) config("reimbursement.category_limits_cents.{$this->value}");

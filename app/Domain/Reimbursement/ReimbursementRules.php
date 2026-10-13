@@ -31,6 +31,7 @@ final class ReimbursementRules
         );
     }
 
+    /** @param  CarbonImmutable|null  $today  injetável para os testes não dependerem da data atual */
     public function evaluate(
         ExpenseCategory $declaredCategory,
         int $claimedCents,

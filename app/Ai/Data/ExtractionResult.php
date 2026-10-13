@@ -2,6 +2,7 @@
 
 namespace App\Ai\Data;
 
+/** Dados extraídos e métricas da chamada (modelo, tokens, latência), gravados para auditoria e custo. */
 final readonly class ExtractionResult
 {
     public function __construct(

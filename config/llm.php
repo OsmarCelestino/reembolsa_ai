@@ -11,6 +11,13 @@ return [
         'timeout' => (int) env('LLM_TIMEOUT', 60),
     ],
 
+    // Preço em US$ por milhão de tokens (entrada, saída), usado só para estimar custo no eval:run.
+    // Tabela pública da Anthropic em out/2026; confira antes de usar como número oficial.
+    'pricing_per_mtok' => [
+        'claude-haiku-5-5' => ['input' => 0.10, 'output' => 0.50],
+        'claude-sonnet-5-5' => ['input' => 2.00, 'output' => 10.00],
+    ],
+
     // Só modelos desta lista podem ser usados (requisito: "apenas modelos autorizados").
     'allowed_models' => array_values(array_filter(array_map(
         'trim',

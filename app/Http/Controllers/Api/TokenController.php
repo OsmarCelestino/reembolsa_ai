@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
+/** Emite e revoga tokens Sanctum da API (validade de 8h). */
 class TokenController extends Controller
 {
     public function store(Request $request): JsonResponse

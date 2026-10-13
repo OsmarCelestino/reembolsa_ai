@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Recebe um pedido: guarda o comprovante no disco privado, cria o registro como
+ * submitted e agenda o processamento por IA na fila (só depois do commit).
+ */
 final class SubmitReimbursement
 {
     private const EXTENSIONS = [
@@ -22,6 +26,7 @@ final class SubmitReimbursement
         'application/pdf' => 'pdf',
     ];
 
+    /** @throws ValidationException se o tipo real do arquivo não for permitido ou o arquivo já tiver sido enviado */
     public function handle(
         User $user,
         UploadedFile $receipt,
