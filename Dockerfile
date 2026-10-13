@@ -12,6 +12,10 @@ ENV COMPOSER_HOME=/tmp/composer
 # Uploads de até 5 MB (regra de negócio) e sem expor a versão do PHP
 RUN printf "upload_max_filesize=6M\npost_max_size=8M\nexpose_php=Off\n" > /usr/local/etc/php/conf.d/app.ini
 
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint
+RUN sed -i "s/\r$//" /usr/local/bin/entrypoint && chmod +x /usr/local/bin/entrypoint
+
 WORKDIR /var/www
+ENTRYPOINT ["entrypoint"]
 EXPOSE 8000
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
