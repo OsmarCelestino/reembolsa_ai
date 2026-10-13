@@ -66,6 +66,13 @@ POST /api/reimbursements/{id}/review           # analista, nunca no próprio ped
 - Funcionário só vê os próprios pedidos (404 para os demais). Analista não revisa o próprio pedido.
 - Só modelos de IA em `LLM_ALLOWED_MODELS` podem ser usados. Chave só no `.env` (fora do Git).
 
+## Cenário de demonstração
+
+`php artisan reembolso:demo` gera 2 notas fictícias e roda o fluxo inteiro com a IA real, comparando com um gabarito
+(`app/Demo/DemoReceipts.php`). A nota 2 traz uma tentativa de prompt injection e um valor inflado: o resultado
+esperado é `rejected`, independentemente do que a IA responder. Teste equivalente com IA simulada:
+`tests/Feature/DemoScenarioTest.php`.
+
 ## Próximos passos
 - RabbitMQ como driver da fila; Camunda para o fluxo de aprovação.
 - RAG com pgvector sobre a política de reembolso.

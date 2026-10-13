@@ -57,7 +57,7 @@ it('valida os campos', function (array $override, string $field) {
     'categoria inexistente' => [['category' => 'luxo'], 'category'],
     'valor negativo' => [['claimed_amount' => '-10'], 'claimed_amount'],
     'valor zero' => [['claimed_amount' => '0'], 'claimed_amount'],
-    'valor com SQL' => [['claimed_amount' => "10; DROP TABLE reimbursements"], 'claimed_amount'],
+    'valor com SQL' => [['claimed_amount' => '10; DROP TABLE reimbursements'], 'claimed_amount'],
     'descrição longa' => [['description' => str_repeat('a', 501)], 'description'],
     'sem arquivo' => [['receipt' => null], 'receipt'],
 ]);

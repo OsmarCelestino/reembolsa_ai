@@ -2,24 +2,30 @@
 
 namespace Database\Seeders;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
+    /** Usuários de desenvolvimento (senha "password"). Nunca rode em produção. */
     public function run(): void
     {
-        // User::factory(10)->create();
+        if (app()->isProduction()) {
+            return;
+        }
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        foreach ([
+            ['funcionario@reembolsa.test', 'Funcionário Demo', UserRole::Employee],
+            ['analista@reembolsa.test', 'Analista Demo', UserRole::Reviewer],
+        ] as [$email, $name, $role]) {
+            User::query()->updateOrCreate(['email' => $email], ['name' => $name, 'password' => Hash::make('password')])
+                ->forceFill(['role' => $role])
+                ->save();
+        }
     }
 }
