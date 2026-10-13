@@ -1,5 +1,5 @@
 # Análise estática com Larastan (PHPStan com regras do Laravel).
-#   docker compose exec app ./vendor/bin/phpstan analyse
+#   docker compose exec app composer analyse   (o padrão de 128 MB do PHP não é suficiente)
 includes:
     - vendor/larastan/larastan/extension.neon
 

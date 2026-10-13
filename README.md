@@ -47,7 +47,7 @@ O `--seed` cria dois usuários de desenvolvimento (senha `password`):
 ```bash
 docker compose exec app ./vendor/bin/pest                   # todos
 docker compose exec app ./vendor/bin/pest --group=rabbitmq  # só a integração com o RabbitMQ
-docker compose exec app ./vendor/bin/phpstan analyse        # análise estática (Larastan, nível 8)
+docker compose exec app composer analyse                    # análise estática (Larastan, nível 8, com 1 GB de memória)
 docker compose exec app ./vendor/bin/pint --test            # estilo
 ```
 
