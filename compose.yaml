@@ -1,6 +1,10 @@
+# Ambiente de DESENVOLVIMENTO (código montado por volume, artisan serve).
+# Produção: compose.prod.yaml (Nginx + PHP-FPM).
 services:
   app:
-    build: .
+    build:
+      context: .
+      target: dev
     container_name: reembolsa_ai_app
     volumes:
       - .:/var/www
@@ -13,7 +17,9 @@ services:
         condition: service_healthy
 
   queue:
-    build: .
+    build:
+      context: .
+      target: dev
     container_name: reembolsa_ai_queue
     command: php artisan queue:work rabbitmq --tries=3 --backoff=30
     environment:
@@ -26,6 +32,21 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      target: dev
+    container_name: reembolsa_ai_scheduler
+    command: php artisan schedule:work
+    environment:
+      WAIT_FOR_VENDOR: "1"
+    restart: unless-stopped
+    volumes:
+      - .:/var/www
+    depends_on:
+      db:
+        condition: service_started
 
   db:
     image: pgvector/pgvector:pg16

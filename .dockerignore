@@ -1,9 +1,22 @@
 .git
+.github
 .idea
 .vscode
 .claude
 node_modules
 vendor
-storage/logs/*
+# Segredos nunca entram na imagem: o .env é passado em tempo de execução (env_file)
+.env
 .env.*
 !.env.example
+# Dados e caches locais (comprovantes de verdade nunca vão para a imagem)
+storage/app/private/*
+storage/app/public/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing/*
+storage/logs/*
+bootstrap/cache/*.php
+tests
+compose*.yaml

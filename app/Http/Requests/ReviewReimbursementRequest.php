@@ -11,6 +11,7 @@ class ReviewReimbursementRequest extends FormRequest
         return true; // a autorização fica na Policy, chamada no controller
     }
 
+    /** @return array<string, mixed> */
     public function rules(): array
     {
         return [

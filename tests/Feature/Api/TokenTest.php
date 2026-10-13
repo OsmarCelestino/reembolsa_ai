@@ -26,3 +26,8 @@ it('limita tentativas de login', function () {
 
     $this->postJson('/api/tokens', ['email' => 'a@a.com', 'password' => 'x', 'device_name' => 't'])->assertTooManyRequests();
 });
+
+it('responde 401 em JSON mesmo sem o header Accept (sem redirect para login)', function () {
+    $this->get('/api/reimbursements')->assertUnauthorized()->assertJson(['message' => 'Unauthenticated.']);
+    $this->get('/api/reimbursements/1/receipt')->assertUnauthorized();
+});

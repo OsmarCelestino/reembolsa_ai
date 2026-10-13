@@ -22,7 +22,7 @@ final class Money
             throw new InvalidArgumentException('Valor monetário inválido.');
         }
 
-        [$reais, $centavos] = array_pad(preg_split('/[.,]/', $amount), 2, '0');
+        [$reais, $centavos] = array_pad(explode('.', str_replace(',', '.', $amount), 2), 2, '0');
 
         return ((int) $reais * 100) + (int) str_pad($centavos, 2, '0');
     }

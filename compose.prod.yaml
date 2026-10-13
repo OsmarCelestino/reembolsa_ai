@@ -1,0 +1,72 @@
+# Ambiente de PRODUÇÃO: Nginx + PHP-FPM, código embutido na imagem, sem artisan serve.
+#   docker compose -f compose.prod.yaml up -d --build
+#   docker compose -f compose.prod.yaml run --rm app php artisan migrate --force
+# O .env de produção precisa de APP_ENV=production, APP_DEBUG=false e senhas próprias.
+
+x-php: &php
+  build:
+    context: .
+    target: prod
+  image: reembolsa-ai:prod
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    - storage:/var/www/storage/app   # comprovantes persistem entre deploys e são compartilhados com a fila
+  depends_on:
+    db:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+
+services:
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - app
+
+  app:
+    <<: *php
+
+  queue:
+    <<: *php
+    command: php artisan queue:work rabbitmq --tries=3 --backoff=30 --max-time=3600
+
+  scheduler:
+    <<: *php
+    command: php artisan schedule:work
+
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      interval: 5s
+      retries: 12
+    # sem "ports": o banco não fica exposto fora da rede do compose
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+
+volumes:
+  pgdata:
+  storage:

@@ -15,6 +15,7 @@ class StoreReimbursementRequest extends FormRequest
         return true; // qualquer usuário autenticado pode pedir reembolso
     }
 
+    /** @return array<string, mixed> */
     public function rules(): array
     {
         $upload = config('reimbursement.upload');

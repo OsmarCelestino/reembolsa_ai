@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Qualidade e segurança
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_sqlite, sockets, bcmath, intl, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache do Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Vulnerabilidades conhecidas nas dependências
+        run: composer audit
+
+      - name: Estilo (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Análise estática (Larastan, nível 8)
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+  tests:
+    name: Testes (PostgreSQL + RabbitMQ)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: reembolsa_test
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: secret
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U app -d reembolsa_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      rabbitmq:
+        image: rabbitmq:3
+        ports: ['5672:5672']
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s --health-timeout 10s --health-retries 20
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: reembolsa_test
+      DB_USERNAME: app
+      DB_PASSWORD: secret
+      RABBITMQ_HOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_sqlite, sockets, bcmath, intl, zip
+          coverage: pcov
+          tools: composer:v2
+
+      - name: Cache do Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Preparar .env
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Pest com cobertura mínima de 90%
+        run: vendor/bin/pest --coverage --min=90
+
+  docker:
+    name: Imagens Docker (dev e produção)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar os arquivos do Compose
+        run: |
+          cp .env.example .env
+          docker compose -f compose.yaml config --quiet
+          docker compose -f compose.prod.yaml config --quiet
+
+      - name: Build da imagem de desenvolvimento
+        run: docker build --target dev -t reembolsa-ai:dev .
+
+      - name: Build das imagens de produção (PHP-FPM e Nginx)
+        run: |
+          docker build --target prod -t reembolsa-ai:prod .
+          docker build --target web -t reembolsa-ai:web .
+
+      - name: Imagem de produção não leva segredos nem dependências de dev
+        run: |
+          docker run --rm --entrypoint sh reembolsa-ai:prod -c '
+            test ! -f .env &&
+            test ! -d vendor/pestphp &&
+            test ! -d tests &&
+            php -m | grep -qi "zend opcache" &&
+            echo "ok"'

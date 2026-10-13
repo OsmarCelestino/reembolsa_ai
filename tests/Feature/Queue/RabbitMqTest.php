@@ -33,11 +33,14 @@ beforeEach(function () {
     ]);
 
     try {
-        $this->rabbit = Queue::connection('rabbitmq');
-        $this->rabbit->size();
+        $connection = Queue::connection('rabbitmq');
+        $connection->size();
     } catch (Throwable $e) {
+        // Sem broker: pula. O afterEach não pode tentar limpar filas numa conexão que falhou.
         $this->markTestSkipped('RabbitMQ indisponível: '.$e->getMessage());
     }
+
+    $this->rabbit = $connection;
 
     Sanctum::actingAs(User::factory()->create());
 });

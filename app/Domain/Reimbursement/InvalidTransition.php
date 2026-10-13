@@ -14,6 +14,11 @@ final class InvalidTransition extends RuntimeException
         return new self("Só pedidos em revisão podem ser aprovados ou recusados (status atual: {$current->value}).");
     }
 
+    public static function cannotReprocess(ReimbursementStatus $current): self
+    {
+        return new self("Só pedidos com falha podem ser reprocessados (status atual: {$current->value}).");
+    }
+
     /** Responde 409 Conflict na API (o Laravel chama este método sozinho). */
     public function render(): JsonResponse
     {

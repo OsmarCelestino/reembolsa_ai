@@ -32,4 +32,8 @@ return [
     ],
 
     'submit_rate_per_minute' => 10,
+
+    // LGPD: por quantos dias o arquivo do comprovante é guardado depois de criado o pedido.
+    // Padrão de 5 anos (1825 dias), prazo usual de guarda de documentos fiscais; ajuste com o jurídico.
+    'retention_days' => (int) env('REIMBURSEMENT_RETENTION_DAYS', 1825),
 ];

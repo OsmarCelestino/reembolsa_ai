@@ -10,6 +10,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Reimbursement */
 class ReimbursementResource extends JsonResource
 {
+    /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         $isReviewer = (bool) $request->user()?->isReviewer();
@@ -37,6 +38,15 @@ class ReimbursementResource extends JsonResource
                 'note' => $this->review_note,
                 'reviewed_at' => $this->reviewed_at?->toIso8601String(),
             ]),
+            // Linha do tempo (só no detalhe): quem mudou o quê e quando, e quem abriu o comprovante.
+            'history' => $this->whenLoaded('auditLogs', fn () => $this->auditLogs->map(fn ($log) => [
+                'action' => $log->action->value,
+                'from' => $log->from_status?->value,
+                'to' => $log->to_status?->value,
+                'actor_id' => $log->actor_id,
+                'reason' => $log->reason,
+                'at' => $log->created_at->toIso8601String(),
+            ])->all()),
             'processed_at' => $this->processed_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];

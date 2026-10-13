@@ -18,6 +18,10 @@ return [
         'claude-sonnet-5-5' => ['input' => 2.00, 'output' => 10.00],
     ],
 
+    // Modelos que recusam tool_choice forçado ("tool"/"any" → HTTP 400): usam "auto" + ferramenta strict.
+    // Fonte: documentação de tool use da Anthropic (out/2026).
+    'auto_tool_choice_models' => ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-1'],
+
     // Só modelos desta lista podem ser usados (requisito: "apenas modelos autorizados").
     'allowed_models' => array_values(array_filter(array_map(
         'trim',

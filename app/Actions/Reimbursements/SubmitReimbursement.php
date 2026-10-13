@@ -8,10 +8,13 @@ use App\Jobs\ProcessReimbursementJob;
 use App\Models\Reimbursement;
 use App\Models\User;
 use App\Support\Text;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 /**
  * Recebe um pedido: guarda o comprovante no disco privado, cria o registro como
@@ -54,26 +57,33 @@ final class SubmitReimbursement
 
         $disk = config('reimbursement.upload.disk');
         // Nome aleatório: o nome original do arquivo nunca vira caminho no servidor.
-        $path = $receipt->storeAs(config('reimbursement.upload.directory'), Str::uuid().'.'.$extension, $disk);
+        $path = $receipt->storeAs(config('reimbursement.upload.directory'), Str::uuid().'.'.$extension, $disk)
+            ?: throw new RuntimeException('Não foi possível gravar o comprovante.');
 
-        return DB::transaction(function () use ($user, $category, $claimedCents, $description, $path, $mime, $sha256) {
-            $reimbursement = new Reimbursement([
-                'category' => $category,
-                'claimed_amount_cents' => $claimedCents,
-                'description' => Text::clean($description, 500),
-            ]);
+        try {
+            return DB::transaction(function () use ($user, $category, $claimedCents, $description, $path, $mime, $sha256) {
+                $reimbursement = new Reimbursement([
+                    'category' => $category,
+                    'claimed_amount_cents' => $claimedCents,
+                    'description' => Text::clean($description, 500),
+                ]);
 
-            $reimbursement->forceFill([
-                'user_id' => $user->id,
-                'receipt_path' => $path,
-                'receipt_mime' => $mime,
-                'receipt_sha256' => $sha256,
-                'status' => ReimbursementStatus::Submitted,
-            ])->save();
+                $reimbursement->transitionTo(ReimbursementStatus::Submitted, $user, [
+                    'user_id' => $user->id,
+                    'receipt_path' => $path,
+                    'receipt_mime' => $mime,
+                    'receipt_sha256' => $sha256,
+                ]);
 
-            ProcessReimbursementJob::dispatch($reimbursement->id)->afterCommit();
+                ProcessReimbursementJob::dispatch($reimbursement->id)->afterCommit();
 
-            return $reimbursement;
-        });
+                return $reimbursement;
+            });
+        } catch (UniqueConstraintViolationException) {
+            // Dois envios do mesmo arquivo ao mesmo tempo: o índice único do banco segura o segundo.
+            Storage::disk($disk)->delete($path);
+
+            throw ValidationException::withMessages(['receipt' => 'Este comprovante já foi enviado.']);
+        }
     }
 }

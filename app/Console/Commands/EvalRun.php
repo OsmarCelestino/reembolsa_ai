@@ -279,7 +279,7 @@ class EvalRun extends Command
             foreach ($misses as $r) {
                 $wrong = array_keys(array_filter($this->fieldHits($r), fn ($ok) => ! $ok));
                 $detail = collect($wrong)->map(fn ($f) => "{$f}: esperado ".json_encode($r['expected'][$f]).', obtido '.json_encode($r['extracted'][$f] ?? null))->implode('; ');
-                $this->line("  - {$r['case']}: status {$r['status']} (esperado {$r['expected_status']})".($detail ? " · {$detail}" : '').($r['error'] ? " · {$r['error']}" : ''));
+                $this->line("  - {$r['case']}: status {$r['status']} (esperado {$r['expected_status']})".($detail ? " · {$detail}" : ''));
             }
         }
     }
@@ -292,7 +292,7 @@ class EvalRun extends Command
     {
         $disk = Storage::disk('local');
         $file = 'eval/eval-'.now()->format('Ymd-His').'.json';
-        $disk->put($file, json_encode(['summary' => $report, 'results' => $results], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $disk->put($file, json_encode(['summary' => $report, 'results' => $results], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
         return $disk->path($file);
     }

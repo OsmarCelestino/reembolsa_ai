@@ -29,12 +29,16 @@ final class ReviewReimbursement
                 throw InvalidTransition::cannotReview($locked->status);
             }
 
-            $locked->forceFill([
-                'status' => $approve ? ReimbursementStatus::Approved : ReimbursementStatus::Rejected,
-                'reviewer_id' => $reviewer->id,
-                'review_note' => Text::clean($note, 1000),
-                'reviewed_at' => now(),
-            ])->save();
+            $locked->transitionTo(
+                $approve ? ReimbursementStatus::Approved : ReimbursementStatus::Rejected,
+                $reviewer,
+                [
+                    'reviewer_id' => $reviewer->id,
+                    'review_note' => Text::clean($note, 1000),
+                    'reviewed_at' => now(),
+                ],
+                reason: 'manual_review',
+            );
 
             return $locked;
         });

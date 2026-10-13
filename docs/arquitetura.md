@@ -17,6 +17,9 @@ torna impossível testar a regra sozinha. O meio-termo:
 | Job | `app/Jobs` | Processamento assíncrono com retry, via RabbitMQ (testado de verdade em `tests/Feature/Queue`) |
 | Suporte | `app/Support` | Utilitários puros: `Money` (centavos), `Cnpj` (inclusive alfanumérico), `Text` (limpeza), `PromptInjectionDetector` |
 | Demo e avaliação | `app/Demo`, `app/Eval` | Comprovantes fictícios com gabarito para `reembolso:demo` e `eval:run` |
+| Ciclo de vida | `Reimbursement::transitionTo()` | Único caminho para mudar o status: grava, audita e dispara o evento, na mesma transação |
+| Auditoria | `ReimbursementAuditLog` | Mudanças de status e acessos ao comprovante, com quem fez |
+| Integração | `app/Events`, `app/Listeners`, `app/Webhooks` | Evento após o commit → webhook assinado na fila |
 
 Eloquent é usado direto nas Actions (sem repositórios): é o padrão do Laravel e não esconde nada.
 A única abstração "extra" é a interface da IA, porque ela é externa, cara e instável — e precisa de fake nos testes.
@@ -38,6 +41,14 @@ ProcessReimbursementJob
 
 POST /api/reimbursements/{id}/review           # analista, nunca no próprio pedido
   → ReviewReimbursement (pending_review → approved | rejected)
+
+POST /api/reimbursements/{id}/reprocess        # analista
+  → ReprocessReimbursement (failed → submitted, volta para a fila)
+
+Toda mudança de status → transitionTo()
+  → grava + linha em reimbursement_audit_logs
+  → ReimbursementStatusChanged (só depois do commit)
+  → QueueStatusWebhook → DeliverWebhookJob (HMAC, até 5 tentativas)
 ```
 
 Se a IA falhar de forma temporária (`AiProviderUnavailable`), o job volta para o RabbitMQ com espera (filas `default.delay.<ms>`)
@@ -66,11 +77,26 @@ Se a resposta da IA for inválida (`ExtractionFailed`), o pedido vai direto para
 - Tipo detectado pelo conteúdo (finfo), não pela extensão; extensão também precisa estar na lista.
 - Nome aleatório no disco privado; o caminho nunca sai na API.
 - Hash SHA-256 bloqueia reenvio do mesmo arquivo; impressão digital (CNPJ+data+valor) bloqueia o mesmo comprovante em outro arquivo.
+- Duplicidade garantida pelo banco: índices únicos parciais (`WHERE status <> 'rejected'`) em `receipt_sha256` e `receipt_fingerprint`.
+  A consulta prévia dá a mensagem amigável; o índice segura dois envios simultâneos. Há teste simulando a corrida.
+- Download só pela API (dono ou analista), com `Content-Disposition: attachment`, `nosniff`, `no-store` e CSP `sandbox`.
 
 **Acesso**
 - Sanctum com token que expira em 8h; rate limit em login e envio.
 - Funcionário só vê os próprios pedidos (404 para os demais). Analista não revisa o próprio pedido.
-- Só modelos de IA em `LLM_ALLOWED_MODELS` podem ser usados. Chave só no `.env` (fora do Git).
+- Só modelos de IA em `LLM_ALLOWED_MODELS` podem ser usados. Chave só no `.env` (fora do Git e da imagem Docker).
+- Visitante sem token recebe 401 em JSON, mesmo sem `Accept: application/json` (sem redirect para login).
+- Webhook só por https, com HMAC sobre timestamp + corpo (anti-replay) e sem dados pessoais.
+
+**Modelos de IA e `tool_choice`**
+- Haiku: `tool_choice` forçado na ferramenta `register_receipt`.
+- Opus 5.5, Sonnet 5.5 e Fable 5.1 recusam escolha forçada (HTTP 400). Para eles o extrator usa `tool_choice: auto`
+  (`config/llm.php`, `auto_tool_choice_models`). A garantia é a mesma: se a IA responder sem chamar a ferramenta,
+  é `ExtractionFailed` e o pedido vai para um analista.
+- A ferramenta é `strict: true` (a API garante o schema). Limites que o modo strict não aceita (tamanho, faixa)
+  ficam na descrição e são revalidados no código.
+
+**LGPD:** ver [lgpd.md](lgpd.md). **Produção:** Nginx + PHP-FPM, ver a seção no README.
 
 ## Cenário de demonstração
 
@@ -78,6 +104,11 @@ Se a resposta da IA for inválida (`ExtractionFailed`), o pedido vai direto para
 (`app/Demo/DemoReceipts.php`). A nota 2 traz uma tentativa de prompt injection e um valor inflado: o resultado
 esperado é `rejected`, independentemente do que a IA responder. Teste equivalente com IA simulada:
 `tests/Feature/DemoScenarioTest.php`.
+
+## Qualidade
+- Pest com PostgreSQL e RabbitMQ reais no CI, cobertura mínima de 90%.
+- Larastan nível 8 (`phpstan.neon`), Pint e `composer audit` no CI.
+- `tests/Feature/Api/OpenApiTest.php` quebra se uma rota da API não estiver em `docs/openapi.yaml`.
 
 ## Próximos passos
 - Camunda para o fluxo de aprovação.

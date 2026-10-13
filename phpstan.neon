@@ -1,0 +1,15 @@
+# Análise estática com Larastan (PHPStan com regras do Laravel).
+#   docker compose exec app ./vendor/bin/phpstan analyse
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - app
+        - config
+        - database
+        - routes
+
+    # Lê os casts declarados no método casts() (padrão do Laravel 11+).
+    parseModelCastsMethod: true

@@ -32,9 +32,11 @@ class ProcessReimbursementJob implements ShouldQueue
     /** Esgotadas as tentativas, marca como failed, mas só se o pedido ainda não tiver resultado. */
     public function failed(?Throwable $exception): void
     {
-        Reimbursement::query()
+        $reimbursement = Reimbursement::query()
             ->whereKey($this->reimbursementId)
             ->whereIn('status', [ReimbursementStatus::Submitted, ReimbursementStatus::Processing])
-            ->update(['status' => ReimbursementStatus::Failed]);
+            ->first();
+
+        $reimbursement?->transitionTo(ReimbursementStatus::Failed, reason: 'retries_exhausted');
     }
 }

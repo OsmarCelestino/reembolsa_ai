@@ -3,6 +3,7 @@
 use App\Enums\ReimbursementStatus;
 use App\Models\Reimbursement;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
@@ -92,4 +93,14 @@ it('métricas da IA só aparecem para analistas', function () {
 
     Sanctum::actingAs($this->reviewer);
     $this->getJson("/api/reimbursements/{$r->id}")->assertOk()->assertJsonPath('data.ai.model', 'claude-haiku-5-5');
+});
+
+it('transição inválida responde 409 sem poluir o log de erros', function () {
+    Log::spy();
+    $r = Reimbursement::factory()->create(['status' => 'approved']);
+    Sanctum::actingAs($this->reviewer);
+
+    $this->postJson("/api/reimbursements/{$r->id}/review", ['decision' => 'approve'])->assertStatus(409);
+
+    Log::shouldNotHaveReceived('error');
 });

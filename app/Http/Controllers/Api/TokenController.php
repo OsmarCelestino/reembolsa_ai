@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -32,9 +33,9 @@ class TokenController extends Controller
         return response()->json(['token' => $token->plainTextToken, 'expires_at' => $token->accessToken->expires_at], 201);
     }
 
-    public function destroy(Request $request): JsonResponse
+    public function destroy(#[CurrentUser] User $user): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $user->currentAccessToken()->delete();
 
         return response()->json(status: 204);
     }

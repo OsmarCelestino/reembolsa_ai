@@ -1,0 +1,325 @@
+openapi: 3.1.0
+info:
+  title: Reembolsa AI
+  version: 1.0.0
+  description: |
+    API de pedidos de reembolso. A IA só extrai os dados do comprovante; a decisão vem de regras de negócio.
+    Autenticação: token Sanctum no header `Authorization: Bearer <token>` (expira em 8h).
+servers:
+  - url: http://localhost:8000/api
+security:
+  - bearer: []
+
+paths:
+  /tokens:
+    post:
+      summary: Emitir token
+      security: []
+      description: Limite de 5 tentativas por minuto por IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, device_name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+                device_name: { type: string, maxLength: 100 }
+      responses:
+        '201':
+          description: Token emitido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  expires_at: { type: string, format: date-time }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { description: Muitas tentativas }
+
+  /tokens/current:
+    delete:
+      summary: Revogar o token atual
+      responses:
+        '204': { description: Token revogado }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /reimbursements:
+    get:
+      summary: Listar pedidos
+      description: Funcionário vê só os seus; analista vê todos.
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/Status' } }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, claimed_amount_cents] } }
+        - { name: direction, in: query, schema: { type: string, enum: [asc, desc] } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 50 } }
+      responses:
+        '200':
+          description: Página de pedidos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Reimbursement' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      summary: Enviar pedido
+      description: |
+        O tipo do arquivo é conferido pelo conteúdo. Responde 202: a leitura pela IA acontece na fila.
+        Limite de 10 envios por minuto por usuário.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [category, claimed_amount, receipt]
+              properties:
+                category: { $ref: '#/components/schemas/Category' }
+                claimed_amount: { type: string, pattern: '^\d{1,7}([.,]\d{1,2})?$', examples: ['45.90'] }
+                description: { type: string, maxLength: 500 }
+                receipt:
+                  type: string
+                  format: binary
+                  description: JPG, PNG, WEBP ou PDF, até 5 MB
+      responses:
+        '202':
+          description: Pedido aceito (status submitted)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reimbursement' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { description: Muitos envios }
+
+  /reimbursements/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      summary: Detalhe do pedido, com a linha do tempo
+      responses:
+        '200':
+          description: Pedido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reimbursement' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { description: Não existe ou não é seu }
+
+  /reimbursements/{id}/receipt:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      summary: Baixar o comprovante
+      description: Dono do pedido ou analista. Cada download fica registrado na auditoria.
+      responses:
+        '200':
+          description: Arquivo
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { description: Não existe ou não é seu }
+        '410': { description: Comprovante descartado pela política de retenção (LGPD) }
+
+  /reimbursements/{id}/review:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      summary: Aprovar ou recusar (analista)
+      description: Só pedidos em pending_review. Ninguém revisa o próprio pedido.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, reject] }
+                note: { type: string, maxLength: 1000, description: Obrigatória ao recusar }
+      responses:
+        '200':
+          description: Pedido revisado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reimbursement' }
+        '403': { description: 'Não é analista, ou é o próprio pedido' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /reimbursements/{id}/reprocess:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      summary: Reprocessar pedido com falha (analista)
+      responses:
+        '202':
+          description: Devolvido à fila (status submitted)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reimbursement' }
+        '403': { description: Não é analista }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+webhooks:
+  reimbursementStatusChanged:
+    post:
+      summary: Mudança de status (opcional, WEBHOOK_URL)
+      description: |
+        Enviado quando o pedido chega a auto_approved, pending_review, approved, rejected ou failed.
+        Valide `X-Reembolsa-Signature` = `sha256=` + HMAC-SHA256(segredo, `<X-Reembolsa-Timestamp>.<corpo>`)
+        e recuse timestamps com mais de 5 minutos. Use `X-Reembolsa-Delivery` para ignorar repetições.
+      parameters:
+        - { name: X-Reembolsa-Event, in: header, required: true, schema: { type: string, const: reimbursement.status_changed } }
+        - { name: X-Reembolsa-Delivery, in: header, required: true, schema: { type: string, format: uuid } }
+        - { name: X-Reembolsa-Timestamp, in: header, required: true, schema: { type: string } }
+        - { name: X-Reembolsa-Signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event: { type: string }
+                reimbursement_id: { type: integer }
+                user_id: { type: integer }
+                category: { $ref: '#/components/schemas/Category' }
+                claimed_amount_cents: { type: integer }
+                previous_status: { oneOf: [{ $ref: '#/components/schemas/Status' }, { type: 'null' }] }
+                status: { $ref: '#/components/schemas/Status' }
+                occurred_at: { type: string, format: date-time }
+      responses:
+        '2XX': { description: Recebido. Outras respostas geram novas tentativas (até 5). }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+
+  responses:
+    Unauthenticated:
+      description: Sem token ou token inválido
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+    ValidationError:
+      description: Dados inválidos
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+              errors:
+                type: object
+                additionalProperties: { type: array, items: { type: string } }
+    Conflict:
+      description: O status atual não permite a operação
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+
+  schemas:
+    Message:
+      type: object
+      properties:
+        message: { type: string }
+
+    Category:
+      type: string
+      enum: [alimentacao, transporte, hospedagem, material]
+
+    Status:
+      type: string
+      enum: [submitted, processing, auto_approved, pending_review, approved, rejected, failed]
+
+    Violation:
+      type: object
+      properties:
+        code: { type: string, examples: [claimed_exceeds_receipt] }
+        severity: { type: string, enum: [hard, soft] }
+        message: { type: string }
+
+    Reimbursement:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        category: { $ref: '#/components/schemas/Category' }
+        claimed_amount_cents: { type: integer }
+        claimed_amount: { type: string, examples: ['R$ 45,90'] }
+        description: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/Status' }
+        violations:
+          type: array
+          items: { $ref: '#/components/schemas/Violation' }
+        extracted:
+          type: [object, 'null']
+          description: O que a IA leu do comprovante
+          properties:
+            cnpj: { type: [string, 'null'] }
+            issuer_name: { type: [string, 'null'] }
+            issue_date: { type: [string, 'null'], format: date }
+            total_cents: { type: [integer, 'null'] }
+            category: { type: [string, 'null'] }
+            confidence: { type: number }
+            suspicious_content: { type: boolean }
+        ai:
+          type: object
+          description: Só para analistas
+          properties:
+            model: { type: string }
+            confidence: { type: number }
+            input_tokens: { type: integer }
+            output_tokens: { type: integer }
+            latency_ms: { type: integer }
+        review:
+          type: object
+          properties:
+            reviewer_id: { type: integer }
+            note: { type: [string, 'null'] }
+            reviewed_at: { type: string, format: date-time }
+        history:
+          type: array
+          description: Só no detalhe
+          items:
+            type: object
+            properties:
+              action: { type: string, enum: [status_changed, receipt_downloaded, receipt_purged] }
+              from: { oneOf: [{ $ref: '#/components/schemas/Status' }, { type: 'null' }] }
+              to: { oneOf: [{ $ref: '#/components/schemas/Status' }, { type: 'null' }] }
+              actor_id: { type: [integer, 'null'], description: null = sistema }
+              reason: { type: [string, 'null'] }
+              at: { type: string, format: date-time }
+        processed_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }

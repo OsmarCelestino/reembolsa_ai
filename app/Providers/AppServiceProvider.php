@@ -23,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
             version: config('llm.anthropic.version'),
             maxTokens: config('llm.anthropic.max_tokens'),
             timeout: config('llm.anthropic.timeout'),
+            autoToolChoiceModels: config('llm.auto_tool_choice_models'),
         ));
 
         $this->app->bind(ReimbursementRules::class, fn () => ReimbursementRules::fromConfig());

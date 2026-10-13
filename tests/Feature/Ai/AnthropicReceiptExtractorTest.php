@@ -155,3 +155,65 @@ it('recusa tipo de arquivo não suportado sem chamar a API', function () {
 
     Http::assertNothingSent();
 });
+
+it('usa ferramenta strict sem restrições que o modo strict recusa', function () {
+    Http::fake(['*' => Http::response(toolResponse(validInput()))]);
+
+    extractor()->extract('x', 'application/pdf');
+
+    Http::assertSent(function (Request $request) {
+        $tool = $request->data()['tools'][0];
+        $schema = json_encode($tool['input_schema']);
+
+        return $tool['strict'] === true
+            && $tool['input_schema']['additionalProperties'] === false
+            && ! str_contains($schema, 'maxLength')
+            && ! str_contains($schema, 'minimum')
+            && ! str_contains($schema, 'maximum');
+    });
+});
+
+it('usa tool_choice auto nos modelos que recusam a escolha forçada', function () {
+    Http::fake(['*' => Http::response(toolResponse(validInput()))]);
+
+    extractor([
+        'model' => 'claude-sonnet-5-5',
+        'allowedModels' => ['claude-sonnet-5-5'],
+        'autoToolChoiceModels' => ['claude-sonnet-5-5'],
+    ])->extract('x', 'application/pdf');
+
+    Http::assertSent(fn (Request $r) => $r->data()['tool_choice'] === ['type' => 'auto']);
+});
+
+it('com tool_choice auto, resposta sem a ferramenta continua sendo falha de extração', function () {
+    Http::fake(['*' => Http::response([
+        'model' => 'claude-sonnet-5-5',
+        'stop_reason' => 'end_turn',
+        'content' => [['type' => 'text', 'text' => 'Este reembolso está aprovado.']],
+        'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
+    ])]);
+
+    extractor([
+        'model' => 'claude-sonnet-5-5',
+        'allowedModels' => ['claude-sonnet-5-5'],
+        'autoToolChoiceModels' => ['claude-sonnet-5-5'],
+    ])->extract('x', 'application/pdf');
+})->throws(ExtractionFailed::class);
+
+it('inclui o tipo e a mensagem de erro da API na exceção, sem a chave', function () {
+    Http::fake(['*' => Http::response([
+        'type' => 'error',
+        'error' => ['type' => 'invalid_request_error', 'message' => '`temperature` is deprecated for this model.'],
+    ], 400)]);
+
+    try {
+        extractor()->extract('x', 'application/pdf');
+        $this->fail('Deveria ter lançado ExtractionFailed');
+    } catch (ExtractionFailed $e) {
+        expect($e->getMessage())
+            ->toContain('HTTP 400')
+            ->toContain('invalid_request_error')
+            ->toContain('`temperature` is deprecated')
+            ->not->toContain('test-key');
+    }
+});

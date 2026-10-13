@@ -28,4 +28,12 @@ class ReimbursementPolicy
             ? Response::deny('Você não pode revisar o seu próprio pedido.')
             : Response::allow();
     }
+
+    /** Reenviar para a IA um pedido que falhou (operação de suporte). */
+    public function reprocess(User $user, Reimbursement $reimbursement): Response
+    {
+        return $user->isReviewer()
+            ? Response::allow()
+            : Response::deny('Apenas analistas podem reprocessar pedidos.');
+    }
 }
